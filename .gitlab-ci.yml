@@ -1,0 +1,71 @@
+stages:
+  - style
+  - build
+  - test
+  - deploy
+
+style-job:
+  stage: style
+  tags: 
+    - style
+  script:
+    - clang-format --style=Google -Werror -n src/cat/s21_cat.* src/grep/s21_grep.*
+  after_script: 
+    - cd src
+    - chmod +x bot.sh 
+    - ./bot.sh "style" "$CI_JOB_STATUS"
+    - cd ../  
+  only:
+    - develop
+
+build-job:
+  stage: build
+  tags: 
+    - build
+  script:
+    - cd src/cat && make s21_cat
+    - cd ../grep && make s21_grep
+  after_script: 
+    - cd src
+    - chmod +x bot.sh 
+    - ./bot.sh "build" "$CI_JOB_STATUS" 
+  artifacts:
+    paths:
+      - src/cat/s21_cat
+      - src/grep/s21_grep
+    expire_in: 30 days
+  only:
+    - develop
+
+test-job:
+  stage: test
+  tags:
+    - test
+  script:
+    - (cd src/cat && make test) 2>/dev/null 1>cat_test.txt
+    - (cd src/grep && make test) 2>/dev/null 1>grep_test.txt
+    - |
+      if ! grep -q "FAIL_TESTS: 0" cat_test.txt || ! grep -q "FAIL_TESTS: 0" grep_test.txt; then
+        exit 1
+      fi
+  after_script:
+    - cd src 
+    - chmod +x bot.sh 
+    - ./bot.sh "test" "$CI_JOB_STATUS"  
+  only:
+    - develop
+
+
+deploy-job:
+  stage: deploy
+  when: manual
+  tags:
+    - deploy
+  script:
+    - cd src
+    - chmod +x copy.sh
+    - ./copy.sh
+  after_script:
+    - cd src 
+    - chmod +x bot.sh 
+    - ./bot.sh "deploy" "$CI_JOB_STATUS"
